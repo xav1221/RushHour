@@ -143,15 +143,18 @@ def draw_vehicle(v, override_color=None):
 trails = {}
 
 def draw_board(board, selected, show_victory):
+    # on ne touche pas à la barre UI : on ne remplit que sous UI_HEIGHT
     WIN.fill(GRID_BG, (0, UI_HEIGHT, SIZE, SIZE))
     for s in stars:
         s.draw(); s.update()
+    # quadrillage
     for i in range(7):
         x, y = i*CELL, UI_HEIGHT + i*CELL
-        pygame.draw.line(WIN, GRID_LINE, (x,UI_HEIGHT), (x,UI_HEIGHT+SIZE))
-        pygame.draw.line(WIN, GRID_LINE, (0,y), (SIZE,y))
+        pygame.draw.line(WIN, GRID_LINE, (x,UI_HEIGHT),(x,UI_HEIGHT+SIZE))
+        pygame.draw.line(WIN, GRID_LINE, (0,y),(SIZE,y))
 
     for v in board.vehicles:
+        # traînées
         for t in trails.get(v.id, []):
             surf = pygame.Surface((t['rect'].w, t['rect'].h), pygame.SRCALPHA)
             surf.fill((*t['col'], t['alpha']))
@@ -212,8 +215,7 @@ def _generate_once(board):
 def random_board(board):
     while True:
         _generate_once(board)
-        sol = solve(board.vehicles)
-        if sol:
+        if solve(board.vehicles):
             return
 
 def solve(vehicles):
@@ -233,8 +235,7 @@ def solve(vehicles):
     goal = None
     while q:
         s = q.popleft()
-        if is_win(s):
-            goal = s; break
+        if is_win(s): goal = s; break
         b = make_board(s)
         for i,(x,y) in enumerate(s):
             id_,L,ori,col = proto[i]
@@ -245,13 +246,11 @@ def solve(vehicles):
                 if b.can_move(v,nx,ny):
                     t = list(s); t[i] = (nx,ny); t = tuple(t)
                     if t not in parent:
-                        parent[t] = s
-                        move_from[t] = (i,d)
+                        parent[t], move_from[t] = s, (i,d)
                         q.append(t)
 
-    if not goal:
-        return []
-    path=[]; cur=goal
+    if not goal: return []
+    path, cur = [], goal
     while parent[cur] is not None:
         path.append(move_from[cur])
         cur = parent[cur]
@@ -277,14 +276,16 @@ def draw_ui(min_moves, played_moves):
         pygame.draw.rect(WIN,BTN_BORDER,rect,2,border_radius=8)
         txt = FONT.render(lbl, True, BTN_BORDER)
         WIN.blit(txt, txt.get_rect(center=rect.center))
+
+    # ** Stats DESSOUS la barre UI **
     y0 = UI_HEIGHT + 5
-    WIN.blit(FONT.render(f"Min : {min_moves}", True, TEXT_COLOR),(10,y0))
+    WIN.blit(FONT.render(f"Min : {min_moves}", True, TEXT_COLOR), (10, y0))
     wm = FONT.render(f"Joués : {played_moves}", True, TEXT_COLOR)
-    WIN.blit(wm,(SIZE-wm.get_width()-10,y0))
+    WIN.blit(wm, (SIZE - wm.get_width() - 10, y0))
 
 def main():
-    clock          = pygame.time.Clock()
-    board          = Board()
+    clock        = pygame.time.Clock()
+    board        = Board()
     config1(board)
 
     selected       = None
@@ -313,7 +314,6 @@ def main():
                         if rect.collidepoint(mx,my):
                             if fn:
                                 fn(board)
-                                # recalc solution for random board
                                 if lbl == "Aléatoire":
                                     solution = solve(board.vehicles)
                                     min_moves = len(solution)
@@ -344,19 +344,17 @@ def main():
                 if d:
                     w = CELL*selected.length if selected.orientation=='H' else CELL
                     h = CELL if selected.orientation=='H' else CELL*selected.length
-                    r = pygame.Rect(selected.x*CELL, UI_HEIGHT+selected.y*CELL, w,h)
+                    r = pygame.Rect(selected.x*CELL, UI_HEIGHT+selected.y*CELL, w, h)
                     trails.setdefault(selected.id,[]).append({'rect':r.copy(),'col':(200,200,50),'alpha':150})
                     selected.move(d, board)
                     played_moves += 1
 
-        # victoire manuelle
         red = board.vehicles[0]
         if not animating and not show_victory and not show_no_sol:
             if red.orientation=='H' and red.x + red.length -1 == EXIT_COL:
                 show_victory = True
                 confetti.extend(Confetto() for _ in range(100))
 
-        # animation auto
         if animating and solution:
             now = pygame.time.get_ticks()
             if now - anim_timer >= ANIM_DELAY:
@@ -364,7 +362,7 @@ def main():
                 v = board.vehicles[i]
                 w = CELL*v.length if v.orientation=='H' else CELL
                 h = CELL if v.orientation=='H' else CELL*v.length
-                r = pygame.Rect(v.x*CELL, UI_HEIGHT+v.y*CELL, w,h)
+                r = pygame.Rect(v.x*CELL, UI_HEIGHT+v.y*CELL, w, h)
                 trails.setdefault(v.id,[]).append({'rect':r.copy(),'col':(200,200,50),'alpha':150})
                 board.vehicles[i].move(d, board)
                 selected = None
@@ -380,12 +378,14 @@ def main():
                 confetti.remove(c)
 
         WIN.fill(WINDOW_BG)
-        draw_ui(min_moves, played_moves)
+        # 1) DESSINER D'ABORD LE PLATEAU
         draw_board(board, selected, show_victory)
-        if show_victory:     draw_message()
-        if show_no_sol:      draw_no_solution()
+        # 2) PUIS LES BOUTONS + COMPTEURS
+        draw_ui(min_moves, played_moves)
+        if show_victory: draw_message()
+        if show_no_sol:  draw_no_solution()
         pygame.display.flip()
         clock.tick(60)
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
